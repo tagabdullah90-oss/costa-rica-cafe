@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Costa Rica Cafe">
+  <rect width="512" height="512" rx="112" fill="#100e0c"/>
+  <circle cx="256" cy="256" r="204" fill="none" stroke="#d8b477" stroke-opacity=".35" stroke-width="8"/>
+  <g fill="#d8b477">
+    <rect x="168" y="210" width="168" height="134" rx="26"/>
+    <rect x="140" y="348" width="232" height="26" rx="13"/>
+    <path d="M336 250a40 40 0 0 1 0 52" fill="none" stroke="#d8b477" stroke-width="17" stroke-linecap="round"/>
+  </g>
+  <ellipse cx="252" cy="216" rx="78" ry="20" fill="#f0d7a6"/>
+  <ellipse cx="252" cy="216" rx="62" ry="11" fill="#966a3e"/>
+  <g fill="none" stroke="#f0d7a6" stroke-opacity=".75" stroke-width="9" stroke-linecap="round">
+    <path d="M216 178c-9-10 9-18 0-30s9-20 0-32"/>
+    <path d="M256 168c-9-10 9-18 0-30s9-20 0-32"/>
+    <path d="M296 178c-9-10 9-18 0-30s9-20 0-32"/>
+  </g>
+</svg>

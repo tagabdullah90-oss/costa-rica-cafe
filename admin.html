@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#100e0c">
+<meta name="robots" content="noindex,nofollow">
+<title>لوحة التحكم | كوستا ريكا كافيه</title>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <span class="logo-sm" aria-hidden="true">☕</span>
+    <div>
+      <b>كوستا ريكا كافيه</b>
+      <small>لوحة التحكم</small>
+    </div>
+  </div>
+
+  <div class="top-actions">
+    <span class="conn" id="connBadge">بيانات GitHub مش متظبطة</span>
+    <a class="btn btn-ghost" href="index.html?preview=1" target="_blank" rel="noopener">👁️ معاينة</a>
+    <button class="btn btn-gold" id="publishBtn" type="button">🚀 نشر التغييرات</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs" aria-label="أقسام لوحة التحكم">
+  <button class="tab is-active" type="button" data-tab="items">📋 الأصناف والأسعار</button>
+  <button class="tab" type="button" data-tab="site">🏪 بيانات الموقع</button>
+  <button class="tab" type="button" data-tab="sync">🔗 النشر والنسخ الاحتياطي</button>
+</nav>
+
+<main class="wrap">
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="panel" id="panel-items">
+    <div class="panel-head">
+      <div>
+        <h1>الأصناف والأسعار</h1>
+        <p class="muted">عدّل الاسم أو السعر مباشرة، ورتّب الأقسام والأصناف بالأسهم. التغييرات محفوظة كمسودة على جهازك لحد ما تنشر.</p>
+      </div>
+      <button class="btn btn-gold" id="addCategory" type="button">+ قسم جديد</button>
+    </div>
+    <div id="catList" class="cat-list">
+      <div class="loading">جاري تحميل المنيو…</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-site" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>بيانات الموقع</h1>
+        <p class="muted">الاسم، الأرقام، اللينكات، الألوان — كل حاجة بتظهر في الموقع بتتظبط من هنا.</p>
+      </div>
+    </div>
+    <div id="siteForm" class="site-form">
+      <div class="loading">جاري التحميل…</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-sync" hidden>
+    <div class="panel-head">
+      <div>
+        <h1>النشر والنسخ الاحتياطي</h1>
+        <p class="muted">اربط حساب GitHub مرة واحدة، وبعدها زر «نشر» بيرفع التعديلات على الموقع مباشرة.</p>
+      </div>
+    </div>
+
+    <div class="cards">
+      <section class="card">
+        <h2>🔗 ربط GitHub</h2>
+        <p class="muted small">التوكن بيتخزن على جهازك انت بس (في المتصفح)، ومش بيتبعت لأي مكان غير GitHub.</p>
+
+        <label class="field">
+          <span>اسم المستخدم أو المنظمة</span>
+          <input id="ghOwner" type="text" dir="ltr" autocomplete="off" placeholder="username">
+        </label>
+        <label class="field">
+          <span>اسم المستودع (Repository)</span>
+          <input id="ghRepo" type="text" dir="ltr" autocomplete="off" placeholder="costa-rica-cafe">
+        </label>
+        <label class="field">
+          <span>الفرع (Branch)</span>
+          <input id="ghBranch" type="text" dir="ltr" autocomplete="off" placeholder="main" value="main">
+        </label>
+        <label class="field">
+          <span>التوكن (Fine-grained token)</span>
+          <input id="ghToken" type="password" dir="ltr" autocomplete="new-password" placeholder="github_pat_…">
+        </label>
+
+        <div class="row">
+          <button class="btn btn-gold" id="ghConnect" type="button">اتصال واختبار</button>
+          <button class="btn btn-ghost" id="ghForget" type="button">مسح البيانات</button>
+        </div>
+
+        <p class="result" id="ghResult"></p>
+
+        <details class="help">
+          <summary>إزاي أعمل التوكن؟</summary>
+          <ol class="muted small">
+            <li>افتح <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">إعدادات التوكنات</a>.</li>
+            <li>Token name: أي اسم، وExpiration: خليه أطول فترة ممكنة.</li>
+            <li>Repository access: اختار <b>Only select repositories</b> وحدد مستودع الموقع.</li>
+            <li>Permissions → Repository permissions → <b>Contents: Read and write</b>.</li>
+            <li>اضغط Generate token وانسخ التوكن هنا.</li>
+          </ol>
+          <p class="muted small">لو التوكن اتسرّب، ارجع لنفس الصفحة وامسحه فوراً.</p>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>🚀 النشر</h2>
+        <p class="muted small">النشر بيرفع <code>data/menu.json</code> و <code>data/site.json</code> للمستودع. GitHub Pages بيحدّث الموقع خلال دقيقة تقريباً.</p>
+
+        <button class="btn btn-gold wide" id="publishBtn2" type="button">🚀 نشر التغييرات دلوقتي</button>
+
+        <p class="result" id="publishLog"></p>
+
+        <hr>
+
+        <h3>💾 نسخة احتياطية</h3>
+        <div class="row">
+          <button class="btn btn-ghost" id="downloadMenu" type="button">تنزيل menu.json</button>
+          <button class="btn btn-ghost" id="downloadSite" type="button">تنزيل site.json</button>
+        </div>
+
+        <label class="btn btn-ghost wide file-btn" for="importFile">📂 استيراد ملف JSON</label>
+        <input id="importFile" type="file" accept=".json,application/json" hidden>
+
+        <hr>
+
+        <h3>🧹 المسودة</h3>
+        <p class="muted small">المسودة محفوظة على المتصفح ده بس. لو مسحت بيانات المتصفح هتضيع.</p>
+        <button class="link-btn danger" id="resetDraft" type="button">تجاهل المسودة وارجع للمنشور</button>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer class="admin-footer">
+  <span>© <span id="year"></span> Costa Rica Cafe</span>
+  <a href="index.html">عرض الموقع</a>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/admin.js"></script>
+</body>
+</html>

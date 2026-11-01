@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-01T00:00:00.000Z",
+  "nameEn": "Costa Rica",
+  "nameAr": "كوستا ريكا كافيه",
+  "sub": "CAFE",
+  "logo": "☕",
+  "tagline": "أهلاً بيك في كوستا ريكا كافيه",
+  "description": "منيو كوستا ريكا كافيه — مشروبات ساخنة وساقعة، فريش، ميلك شيك، موهيتو، سبيشيال درينكس، شيشة وأكثر.",
+  "currency": "ج.م",
+  "whatsapp": "201103766822",
+  "phones": [
+    "01228235511",
+    "01069242494",
+    "01103766822"
+  ],
+  "address": "",
+  "hours": "",
+  "facebook": "https://www.facebook.com/search/top?q=Costa%20Rica%20cafe",
+  "instagram": "",
+  "mapUrl": "",
+  "note": "الأسعار بالجنيه المصري — الأسعار قابلة للتغيير.",
+  "theme": {
+    "gold": "#d8b477",
+    "gold2": "#f0d7a6",
+    "bg": "#100e0c"
+  }
+}

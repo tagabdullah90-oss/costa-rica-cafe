@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-01T00:00:00.000Z",
+  "categories": [
+    {
+      "id": "hot",
+      "name": "المشروبات الساخنة",
+      "icon": "☕",
+      "items": [
+        { "id": "espresso", "name": "إسبريسو", "price": 45, "desc": "" },
+        { "id": "espresso-double", "name": "إسبريسو دبل", "price": 55, "desc": "" },
+        { "id": "macchiato", "name": "ميكاتو", "price": 55, "desc": "" },
+        { "id": "macchiato-double", "name": "ميكاتو دبل", "price": 65, "desc": "" },
+        { "id": "cortado", "name": "كورتادو", "price": 65, "desc": "" },
+        { "id": "spanish-latte", "name": "إسبانش لاتيه", "price": 85, "desc": "" },
+        { "id": "latte", "name": "لاتيه", "price": 70, "desc": "" },
+        { "id": "cappuccino", "name": "كابتشينو", "price": 80, "desc": "" },
+        { "id": "mocha", "name": "موكا", "price": 80, "desc": "" },
+        { "id": "flat-white", "name": "فلات وايت", "price": 80, "desc": "" },
+        { "id": "nescafe", "name": "نسكافيه", "price": 65, "desc": "" },
+        { "id": "hot-chocolate", "name": "هوت شوكليت", "price": 70, "desc": "" },
+        { "id": "french-coffee", "name": "قهوة فرنساوي", "price": 55, "desc": "" },
+        { "id": "turkish-coffee", "name": "قهوة تركي", "price": 60, "desc": "" },
+        { "id": "hot-cider", "name": "هوت سيدر", "price": 65, "desc": "" },
+        { "id": "tea", "name": "شاي", "price": 35, "desc": "" },
+        { "id": "anise", "name": "ينسون", "price": 40, "desc": "" },
+        { "id": "green-tea", "name": "شاي أخضر", "price": 35, "desc": "" },
+        { "id": "mint", "name": "نعناع", "price": 35, "desc": "" },
+        { "id": "matcha-latte", "name": "ماتشا لاتيه", "price": 55, "desc": "" }
+      ]
+    },
+    {
+      "id": "cold",
+      "name": "المشروبات الساقعة",
+      "icon": "🧊",
+      "items": [
+        { "id": "iced-latte", "name": "آيس لاتيه", "price": 85, "desc": "" },
+        { "id": "iced-cappuccino", "name": "آيس كابتشينو لاتيه", "price": 95, "desc": "" },
+        { "id": "iced-caramel-macchiato", "name": "آيس كراميل ميكاتو", "price": 95, "desc": "" },
+        { "id": "iced-mocha", "name": "آيس موكا", "price": 90, "desc": "" },
+        { "id": "iced-skinny", "name": "آيس سكينى", "price": 90, "desc": "" },
+        { "id": "iced-chocolate", "name": "آيس شوكليت", "price": 75, "desc": "" },
+        { "id": "iced-matcha", "name": "آيس ماتشا لاتيه", "price": 75, "desc": "" }
+      ]
+    },
+    {
+      "id": "fresh",
+      "name": "الفريش",
+      "icon": "🍹",
+      "items": [
+        { "id": "mango", "name": "مانجا", "price": 80, "desc": "" },
+        { "id": "strawberry", "name": "فراولة", "price": 75, "desc": "" },
+        { "id": "guava", "name": "جوافة", "price": 75, "desc": "" },
+        { "id": "pomegranate", "name": "رمان", "price": 75, "desc": "" },
+        { "id": "dates", "name": "بلح", "price": 80, "desc": "" },
+        { "id": "peach", "name": "خوخ", "price": 75, "desc": "" },
+        { "id": "lemon", "name": "ليمون", "price": 65, "desc": "" },
+        { "id": "lemon-mint", "name": "ليمون بالنعناع", "price": 70, "desc": "" },
+        { "id": "lemon-white", "name": "ليمون وايت", "price": 75, "desc": "" },
+        { "id": "smoothie", "name": "سموزي", "price": 90, "desc": "" }
+      ]
+    },
+    {
+      "id": "milk",
+      "name": "ميلك شيك",
+      "icon": "🥛",
+      "items": [
+        { "id": "vanilla", "name": "فانيليا", "price": 80, "desc": "" },
+        { "id": "nutella", "name": "نوتيلا", "price": 80, "desc": "" },
+        { "id": "oreo", "name": "أوريو", "price": 90, "desc": "" },
+        { "id": "twinkies", "name": "توينكز", "price": 85, "desc": "" },
+        { "id": "kinder", "name": "كيندر", "price": 100, "desc": "" }
+      ]
+    },
+    {
+      "id": "mojito",
+      "name": "موهيتو",
+      "icon": "🍸",
+      "items": [
+        { "id": "mojito-classic", "name": "كلاسيك", "price": 75, "desc": "" },
+        { "id": "mojito-florida", "name": "فلوريدا", "price": 85, "desc": "" },
+        { "id": "mojito-redbull", "name": "ريد بول", "price": 120, "desc": "" },
+        { "id": "mojito-blue", "name": "بلو", "price": 135, "desc": "" }
+      ]
+    },
+    {
+      "id": "special",
+      "name": "Special Drinks",
+      "icon": "✨",
+      "items": [
+        { "id": "mango-tango", "name": "مانجو تانجو", "price": 85, "desc": "" },
+        { "id": "dates-mint", "name": "بلح بالنعناع", "price": 90, "desc": "" },
+        { "id": "claudia", "name": "كالوديا", "price": 95, "desc": "" },
+        { "id": "guava-mist", "name": "جوافة ميست", "price": 85, "desc": "" }
+      ]
+    },
+    {
+      "id": "extras",
+      "name": "الإضافات",
+      "icon": "➕",
+      "items": [
+        { "id": "extra-sauce", "name": "إكسترا صوص", "price": 25, "desc": "" },
+        { "id": "extra-flavor", "name": "إكسترا فليفر", "price": 30, "desc": "" },
+        { "id": "small-water", "name": "مياه صغيرة", "price": 15, "desc": "" }
+      ]
+    },
+    {
+      "id": "soda",
+      "name": "مشروبات غازية",
+      "icon": "🥤",
+      "items": [
+        { "id": "pepsi", "name": "بيبسي", "price": 50, "desc": "" },
+        { "id": "coca-cola", "name": "كوكاكولا", "price": 50, "desc": "" },
+        { "id": "seven", "name": "سفن", "price": 50, "desc": "" },
+        { "id": "mirinda", "name": "ميرندا", "price": 50, "desc": "" },
+        { "id": "birell", "name": "بيريل", "price": 50, "desc": "" },
+        { "id": "seven-cola", "name": "7 كولا", "price": 50, "desc": "" },
+        { "id": "redbull", "name": "ريد بول", "price": 100, "desc": "" }
+      ]
+    },
+    {
+      "id": "shisha",
+      "name": "شيشة",
+      "icon": "💨",
+      "items": [
+        { "id": "shisha-saloom", "name": "معسل سلوم", "price": 30, "desc": "" },
+        { "id": "shisha-luxury", "name": "شيشة فاخر", "price": 150, "desc": "" },
+        { "id": "shisha-mix", "name": "شيشة ميكس", "price": 160, "desc": "" },
+        { "id": "shisha-costa-rica", "name": "شيشة كوستا ريكا", "price": 180, "desc": "" }
+      ]
+    }
+  ]
+}
