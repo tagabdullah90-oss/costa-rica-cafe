@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#100e0c">
+<title>كوستا ريكا كافيه — نظام الكاشير</title>
+<meta name="description" content="نظام كاشير وحسابات كوستا ريكا كافيه — يعمل على أكثر من هاتف مع مزامنة لحظية للطلبات.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Costa Rica POS">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<div id="app">
+  <header id="topbar" class="topbar"></header>
+
+  <main id="screen" class="screen" aria-live="polite"></main>
+
+  <nav id="bottomnav" class="bottomnav" aria-label="التنقل الرئيسي"></nav>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-root" aria-live="polite"></div>
+<div id="printArea" class="print-area" aria-hidden="true"></div>
+
+<noscript>
+  <div class="noscript">
+    <h1>كوستا ريكا كافيه</h1>
+    <p>النظام محتاج JavaScript علشان يشتغل. من فضلك فعّل الجافاسكريبت في المتصفح.</p>
+  </div>
+</noscript>
+
+<script src="assets/js/menu-data.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/views.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
