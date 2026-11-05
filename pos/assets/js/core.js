@@ -871,6 +871,7 @@
     S.sync.cloud = null;
     if (!cloud) return;
     if (cloud.timer) { clearTimeout(cloud.timer); cloud.timer = null; }
+    if (cloud.graceTimer) { clearTimeout(cloud.graceTimer); cloud.graceTimer = null; }
     if (cloud.client) {
       try { cloud.client.removeAllListeners(); } catch (e) { /* ignore */ }
       try { cloud.client.end(true); } catch (e) { /* ignore */ }
@@ -968,30 +969,49 @@
     return out;
   }
 
-  function cloudSnapshot() {
+  function cloudData() {
     return {
-      v: 1,
-      at: Date.now(),
-      dev: S.deviceId,
-      data: {
-        settings: S.state.settings,
-        menu: S.state.menu,
-        orders: capCollection(S.state.orders, 800),
-        expenses: capCollection(S.state.expenses, 800),
-        shifts: capCollection(S.state.shifts, 400),
-        meta: S.state.meta
-      }
+      settings: S.state.settings,
+      menu: S.state.menu,
+      orders: capCollection(S.state.orders, 800),
+      expenses: capCollection(S.state.expenses, 800),
+      shifts: capCollection(S.state.shifts, 400),
+      meta: S.state.meta
     };
+  }
+
+  function cloudSnapshot() {
+    return { v: 1, at: Date.now(), dev: S.deviceId, data: cloudData() };
+  }
+
+  /* Canonical JSON so two devices with the same data produce the same signature
+     even if object keys were inserted in a different order. */
+  function stableStringify(value) {
+    if (value === null || typeof value !== 'object') {
+      return JSON.stringify(value === undefined ? null : value);
+    }
+    if (Array.isArray(value)) {
+      return '[' + value.map(stableStringify).join(',') + ']';
+    }
+    var keys = Object.keys(value).filter(function (k) { return value[k] !== undefined; }).sort();
+    return '{' + keys.map(function (k) {
+      return JSON.stringify(k) + ':' + stableStringify(value[k]);
+    }).join(',') + '}';
+  }
+
+  function cloudSig(data) {
+    return stableStringify(data || {});
   }
 
   function cloudPublish(force) {
     var cloud = S.sync.cloud;
     if (!cloud || !cloud.client || !cloud.client.connected) return;
-    var json = JSON.stringify(cloudSnapshot());
-    if (!force && json === cloud.lastSent) return;
-    cloud.lastSent = json;
+    var snap = cloudSnapshot();
+    var sig = cloudSig(snap.data);
+    if (!force && sig === cloud.lastSig) return;
+    cloud.lastSig = sig;
     try {
-      cloud.client.publish(cloud.topic, json, { qos: 1, retain: true });
+      cloud.client.publish(cloud.topic, JSON.stringify(snap), { qos: 1, retain: true });
     } catch (e) { /* ignore */ }
   }
 
@@ -1007,6 +1027,20 @@
   }
 
   S.cloudPublish = cloudPublishSoon;
+
+  /* Wait a moment for the broker's retained snapshot before publishing ours,
+     so a fresh device never overwrites existing orders with an empty state. */
+  function startCloudGrace() {
+    var cloud = S.sync.cloud;
+    if (!cloud) return;
+    cloud.synced = false;
+    if (cloud.graceTimer) clearTimeout(cloud.graceTimer);
+    cloud.graceTimer = setTimeout(function () {
+      cloud.graceTimer = null;
+      if (!S.sync.cloud || S.sync.cloud !== cloud || cloud.synced) return;
+      cloudPublish(true);
+    }, 3000);
+  }
 
   function mergeCollection(local, remote) {
     local = local || {};
@@ -1108,8 +1142,17 @@
     try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
     if (!msg || msg.v !== 1 || !msg.data) return;
     if (msg.dev === S.deviceId) return;
-    var localAhead = applyCloudSnapshot(msg.data, Number(msg.at) || 0);
-    if (localAhead) cloudPublishSoon();
+    var cloud = S.sync.cloud;
+    if (cloud) {
+      cloud.synced = true;
+      if (cloud.graceTimer) { clearTimeout(cloud.graceTimer); cloud.graceTimer = null; }
+    }
+    var remoteSig = cloudSig(msg.data);
+    applyCloudSnapshot(msg.data, Number(msg.at) || 0);
+    if (!S.sync.cloud || S.sync.cloud !== cloud) return;
+    var mergedSig = cloudSig(cloudData());
+    if (!cloud.lastSig && mergedSig === remoteSig) cloud.lastSig = mergedSig;
+    if (mergedSig !== cloud.lastSig) cloudPublishSoon();
   }
 
   function subscribeCloud(client, key) {
@@ -1158,6 +1201,7 @@
           } else if (S.sync.cloud) {
             subscribeCloud(client, key);
             setStatus('online', '');
+            startCloudGrace();
           }
         });
         client.on('reconnect', function () {
@@ -1181,16 +1225,18 @@
         broker: broker,
         cafeKey: key,
         topic: cloudTopic(key),
-        lastSent: '',
+        lastSig: '',
         lastLocalAt: 0,
-        timer: null
+        synced: false,
+        timer: null,
+        graceTimer: null
       };
       S.sync.connectedAt = Date.now();
       client.on('message', function (topic, buf) { onCloudMessage(buf); });
       subscribeCloud(client, key);
       setStatus('online', '');
+      startCloudGrace();
       S.emit('change', 'sync');
-      setTimeout(function () { cloudPublish(true); }, 1200);
       return { broker: broker, cafeKey: key };
     }).catch(function (err) {
       S.sync.mode = null;
