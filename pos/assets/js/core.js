@@ -365,7 +365,8 @@
     sync: 'crc_pos_sync_v1',
     user: 'crc_pos_user_v1',
     device: 'crc_pos_device_v1',
-    draft: 'crc_pos_draft_v1'
+    draft: 'crc_pos_draft_v1',
+    cloud: 'crc_pos_cloud_v1'
   };
 
   var DEFAULT_SETTINGS = {
@@ -418,12 +419,15 @@
   };
 
   S.sync = {
+    mode: null,
     cfg: null,
     status: 'local',
     error: '',
     base: null,
     app: null,
     db: null,
+    cloud: null,
+    cloudCfg: null,
     connectedAt: 0
   };
 
@@ -567,6 +571,7 @@
     if (bc && !S.sync.base) {
       try { bc.postMessage({ type: 'state', source: S.deviceId, tab: tabId }); } catch (e) { /* ignore */ }
     }
+    if (S.sync.cloud) cloudPublishSoon();
     S.emit('change', scope || 'all');
     if (!opts || !opts.quiet) S.emit('save', scope || 'all');
   }
@@ -643,6 +648,7 @@
 
   S.connect = function (cfg) {
     cfg = cfg || {};
+    if (cfg.broker) return S.connectCloud(cfg);
     return Promise.resolve().then(function () {
       var databaseURL = normalizeDatabaseURL(cfg.databaseURL);
       var cafeKey = String(cfg.cafeKey || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -844,26 +850,377 @@
     }
   }
 
+  function closeFirebase() {
+    if (S.sync.base) {
+      try { S.sync.base.off(); } catch (e) { /* ignore */ }
+    }
+    if (S.sync.db) {
+      try { S.sync.db.ref('.info/connected').off(); } catch (e) { /* ignore */ }
+    }
+    var app = S.sync.app;
+    S.sync.base = null;
+    S.sync.db = null;
+    S.sync.app = null;
+    if (app) {
+      try { app.delete(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function closeCloud() {
+    var cloud = S.sync.cloud;
+    S.sync.cloud = null;
+    if (!cloud) return;
+    if (cloud.timer) { clearTimeout(cloud.timer); cloud.timer = null; }
+    if (cloud.client) {
+      try { cloud.client.removeAllListeners(); } catch (e) { /* ignore */ }
+      try { cloud.client.end(true); } catch (e) { /* ignore */ }
+    }
+  }
+
   S.disconnect = function () {
     return Promise.resolve().then(function () {
-      if (S.sync.base) {
-        try { S.sync.base.off(); } catch (e) { /* ignore */ }
-      }
-      if (S.sync.db) {
-        try { S.sync.db.ref('.info/connected').off(); } catch (e) { /* ignore */ }
-      }
-      var app = S.sync.app;
-      S.sync.base = null;
-      S.sync.db = null;
-      S.sync.app = null;
+      var mode = S.sync.mode;
+      closeFirebase();
+      closeCloud();
+      S.sync.mode = null;
       S.sync.cfg = null;
-      if (app) {
-        try { app.delete(); } catch (e) { /* ignore */ }
+      S.sync.cloudCfg = null;
+      S.sync.connectedAt = 0;
+      if (mode === 'cloud') {
+        var kept = loadCloudConfig();
+        if (kept) saveCloudConfig({ broker: kept.broker, cafeKey: kept.cafeKey, enabled: false });
+      } else {
+        S.saveSyncConfig(null);
       }
       if (S.sync.status !== 'error') setStatus('local', '');
-      S.saveSyncConfig(null);
       S.emit('change', 'sync');
     });
+  };
+
+  /* ---------------- open cloud sync (MQTT, no account) ---------------- */
+
+  var CLOUD = {
+    broker: 'wss://broker.emqx.io:8084/mqtt',
+    fallback: 'wss://broker.hivemq.com:8884/mqtt',
+    cafeKey: 'crc-costarica-7f3k9m2q',
+    topicPrefix: 'crcpos/v1/',
+    script: 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js',
+    scriptAlt: 'https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js'
+  };
+
+  S.CLOUD_DEFAULT = { broker: CLOUD.broker, cafeKey: CLOUD.cafeKey };
+
+  function loadCloudConfig() {
+    var cfg = readJSON(LS.cloud);
+    if (!cfg || !cfg.broker || !cfg.cafeKey) return null;
+    return {
+      broker: String(cfg.broker),
+      cafeKey: String(cfg.cafeKey),
+      enabled: cfg.enabled !== false
+    };
+  }
+
+  function saveCloudConfig(cfg) {
+    if (!cfg) {
+      try { localStorage.removeItem(LS.cloud); } catch (e) { /* ignore */ }
+      return;
+    }
+    writeJSON(LS.cloud, {
+      broker: cfg.broker,
+      cafeKey: cfg.cafeKey,
+      enabled: cfg.enabled !== false
+    });
+  }
+
+  S.loadCloudConfig = loadCloudConfig;
+  S.saveCloudConfig = saveCloudConfig;
+
+  function normalizeBroker(url) {
+    var u = String(url || '').trim().replace(/\/+$/, '');
+    if (!u) return CLOUD.broker;
+    u = u.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+    if (!/^wss?:\/\//i.test(u)) return CLOUD.broker;
+    return u;
+  }
+
+  function cloudTopic(key) {
+    return CLOUD.topicPrefix + key + '/state';
+  }
+
+  function loadMqtt() {
+    if (window.mqtt && window.mqtt.connect) return Promise.resolve();
+    return U.loadScript(CLOUD.script).catch(function () {
+      return U.loadScript(CLOUD.scriptAlt);
+    });
+  }
+
+  function capCollection(map, limit) {
+    map = map || {};
+    var ids = Object.keys(map);
+    if (ids.length <= limit) return map;
+    ids.sort(function (a, b) {
+      var av = map[a] || {};
+      var bv = map[b] || {};
+      return Number(bv.createdAt || bv.updatedAt || 0) - Number(av.createdAt || av.updatedAt || 0);
+    });
+    var out = {};
+    ids.slice(0, limit).forEach(function (id) { out[id] = map[id]; });
+    return out;
+  }
+
+  function cloudSnapshot() {
+    return {
+      v: 1,
+      at: Date.now(),
+      dev: S.deviceId,
+      data: {
+        settings: S.state.settings,
+        menu: S.state.menu,
+        orders: capCollection(S.state.orders, 800),
+        expenses: capCollection(S.state.expenses, 800),
+        shifts: capCollection(S.state.shifts, 400),
+        meta: S.state.meta
+      }
+    };
+  }
+
+  function cloudPublish(force) {
+    var cloud = S.sync.cloud;
+    if (!cloud || !cloud.client || !cloud.client.connected) return;
+    var json = JSON.stringify(cloudSnapshot());
+    if (!force && json === cloud.lastSent) return;
+    cloud.lastSent = json;
+    try {
+      cloud.client.publish(cloud.topic, json, { qos: 1, retain: true });
+    } catch (e) { /* ignore */ }
+  }
+
+  function cloudPublishSoon() {
+    var cloud = S.sync.cloud;
+    if (!cloud) return;
+    cloud.lastLocalAt = Date.now();
+    if (cloud.timer) clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(function () {
+      cloud.timer = null;
+      cloudPublish(false);
+    }, 600);
+  }
+
+  S.cloudPublish = cloudPublishSoon;
+
+  function mergeCollection(local, remote) {
+    local = local || {};
+    remote = remote || {};
+    var merged = {};
+    var localAhead = false;
+    Object.keys(local).forEach(function (id) {
+      var l = local[id];
+      var r = remote[id];
+      if (!r) { merged[id] = l; localAhead = true; return; }
+      var lu = Number(l && l.updatedAt || 0);
+      var ru = Number(r && r.updatedAt || 0);
+      if (lu > ru) { merged[id] = l; localAhead = true; }
+      else merged[id] = r;
+    });
+    Object.keys(remote).forEach(function (id) {
+      if (!merged[id]) merged[id] = remote[id];
+    });
+    return { merged: merged, localAhead: localAhead };
+  }
+
+  function applyCloudSnapshot(data, at) {
+    if (!data || typeof data !== 'object') return false;
+
+    var localAhead = false;
+    var cloud = S.sync.cloud;
+    var guardSettings = cloud && cloud.lastLocalAt && at && at < cloud.lastLocalAt - 1500;
+
+    var localMeta = S.state.meta || {};
+    var remoteMeta = data.meta || {};
+    var localCleared = localMeta.cleared || {};
+    var remoteCleared = remoteMeta.cleared || {};
+    var cleared = {};
+    Object.keys(localCleared).concat(Object.keys(remoteCleared)).forEach(function (k) {
+      cleared[k] = Math.max(Number(localCleared[k]) || 0, Number(remoteCleared[k]) || 0);
+    });
+
+    ['orders', 'expenses', 'shifts'].forEach(function (col) {
+      var cutoff = Number(cleared[col]) || 0;
+      if (!cutoff) return;
+      var localCol = S.state[col] || {};
+      Object.keys(localCol).forEach(function (id) {
+        var rec = localCol[id];
+        if (Number(rec && rec.updatedAt || 0) < cutoff) delete localCol[id];
+      });
+      var remoteCol = data[col] || {};
+      Object.keys(remoteCol).forEach(function (id) {
+        var rec = remoteCol[id];
+        if (Number(rec && rec.updatedAt || 0) < cutoff) delete remoteCol[id];
+      });
+    });
+
+    var newOrders = [];
+    Object.keys(data.orders || {}).forEach(function (id) {
+      var rec = data.orders[id];
+      if (!rec || S.state.orders[id]) return;
+      if (Number(rec.createdAt || 0) > (S.sync.connectedAt || 0) - 5000 && rec.deviceId !== S.deviceId) {
+        newOrders.push(rec);
+      }
+    });
+
+    var orders = mergeCollection(S.state.orders, data.orders);
+    var expenses = mergeCollection(S.state.expenses, data.expenses);
+    var shifts = mergeCollection(S.state.shifts, data.shifts);
+    S.state.orders = orders.merged;
+    S.state.expenses = expenses.merged;
+    S.state.shifts = shifts.merged;
+    localAhead = localAhead || orders.localAhead || expenses.localAhead || shifts.localAhead;
+
+    if (data.settings) {
+      if (guardSettings) localAhead = true;
+      else S.state.settings = normalizeSettings(data.settings);
+    }
+    if (data.menu) {
+      if (guardSettings) localAhead = true;
+      else S.state.menu = normalizeMenu(data.menu);
+    }
+
+    var localSeq = localMeta.seq && typeof localMeta.seq === 'object' ? localMeta.seq : {};
+    var remoteSeq = remoteMeta.seq && typeof remoteMeta.seq === 'object' ? remoteMeta.seq : {};
+    var mergedSeq = {};
+    Object.keys(localSeq).concat(Object.keys(remoteSeq)).forEach(function (day) {
+      mergedSeq[day] = Math.max(Number(localSeq[day]) || 0, Number(remoteSeq[day]) || 0);
+    });
+    S.state.meta = Object.assign({}, localMeta, remoteMeta, { seq: mergedSeq, cleared: cleared });
+
+    saveState();
+    S.emit('change', 'all');
+
+    if (newOrders.length) {
+      newOrders.sort(function (a, b) { return Number(a.createdAt || 0) - Number(b.createdAt || 0); });
+      S.emit('order:new', newOrders[newOrders.length - 1]);
+    }
+    return localAhead;
+  }
+
+  function onCloudMessage(buf) {
+    var msg;
+    try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
+    if (!msg || msg.v !== 1 || !msg.data) return;
+    if (msg.dev === S.deviceId) return;
+    var localAhead = applyCloudSnapshot(msg.data, Number(msg.at) || 0);
+    if (localAhead) cloudPublishSoon();
+  }
+
+  function subscribeCloud(client, key) {
+    try { client.subscribe(cloudTopic(key), { qos: 1 }); } catch (e) { /* ignore */ }
+  }
+
+  S.connectCloud = function (cfg) {
+    cfg = cfg || {};
+    var broker = normalizeBroker(cfg.broker || cfg.databaseURL || CLOUD.broker);
+    var key = String(cfg.cafeKey || CLOUD.cafeKey).trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!key) return Promise.reject(new Error('كود الكافيه مطلوب'));
+
+    closeFirebase();
+    closeCloud();
+
+    S.sync.mode = 'cloud';
+    S.sync.cfg = { broker: broker, cafeKey: key };
+    S.sync.cloudCfg = { broker: broker, cafeKey: key };
+    saveCloudConfig({ broker: broker, cafeKey: key, enabled: true });
+    S.saveSyncConfig(null);
+    setStatus('connecting', '');
+    S.emit('change', 'sync');
+
+    return loadMqtt().then(function () {
+      if (!window.mqtt || !window.mqtt.connect) throw new Error('تعذر تحميل مكتبة المزامنة');
+      return new Promise(function (resolve, reject) {
+        var client = window.mqtt.connect(broker, {
+          clientId: 'crc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4),
+          keepalive: 30,
+          reconnectPeriod: 5000,
+          connectTimeout: 12000,
+          clean: true
+        });
+        var settled = false;
+        var timer = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          try { client.end(true); } catch (e) { /* ignore */ }
+          reject(new Error('تعذر الاتصال بالسحابة — راجع النت وجرب تاني'));
+        }, 16000);
+        client.on('connect', function () {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(client);
+          } else if (S.sync.cloud) {
+            subscribeCloud(client, key);
+            setStatus('online', '');
+          }
+        });
+        client.on('reconnect', function () {
+          if (settled && S.sync.cloud) setStatus('connecting', '');
+        });
+        client.on('close', function () {
+          if (settled && S.sync.cloud) setStatus('offline', '');
+        });
+        client.on('error', function (err) {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            try { client.end(true); } catch (e) { /* ignore */ }
+            reject(new Error(err && err.message ? err.message : 'خطأ في الاتصال بالسحابة'));
+          }
+        });
+      });
+    }).then(function (client) {
+      S.sync.cloud = {
+        client: client,
+        broker: broker,
+        cafeKey: key,
+        topic: cloudTopic(key),
+        lastSent: '',
+        lastLocalAt: 0,
+        timer: null
+      };
+      S.sync.connectedAt = Date.now();
+      client.on('message', function (topic, buf) { onCloudMessage(buf); });
+      subscribeCloud(client, key);
+      setStatus('online', '');
+      S.emit('change', 'sync');
+      setTimeout(function () { cloudPublish(true); }, 1200);
+      return { broker: broker, cafeKey: key };
+    }).catch(function (err) {
+      S.sync.mode = null;
+      S.sync.cloudCfg = null;
+      setStatus('error', err && err.message ? err.message : 'فشل الاتصال');
+      S.emit('change', 'sync');
+      throw err;
+    });
+  };
+
+  S.cloudBoot = function () {
+    try {
+      if (typeof WebSocket === 'undefined') return Promise.resolve(null);
+      if (location.protocol === 'file:') return Promise.resolve(null);
+      if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(location.hostname)) return Promise.resolve(null);
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+    var firebaseCfg = S.loadSyncConfig();
+    if (firebaseCfg) return S.connect(firebaseCfg);
+    var cloudCfg = loadCloudConfig();
+    if (cloudCfg && cloudCfg.enabled === false) {
+      setStatus('local', '');
+      return Promise.resolve(null);
+    }
+    if (!cloudCfg) {
+      cloudCfg = { broker: CLOUD.broker, cafeKey: CLOUD.cafeKey, enabled: true };
+      saveCloudConfig(cloudCfg);
+    }
+    return S.connectCloud(cloudCfg);
   };
 
   /* ---------------- init ---------------- */
@@ -905,6 +1262,7 @@
     S.state.menu.updatedAt = new Date().toISOString();
     saveState();
     if (S.sync.base) rset('menu', S.state.menu);
+    if (S.sync.cloud) cloudPublishSoon();
     S.emit('change', 'menu');
   }
 
@@ -970,6 +1328,7 @@
 
   var pushSettings = U.debounce(function () {
     if (S.sync.base) rset('settings', S.state.settings);
+    if (S.sync.cloud) cloudPublishSoon();
   }, 350);
 
   S.updateSettings = function (patch) {
@@ -1164,7 +1523,16 @@
 
   function localNext(day) {
     S.state.meta.seq = S.state.meta.seq || {};
-    var n = (Number(S.state.meta.seq[day]) || 0) + 1;
+    var n = Number(S.state.meta.seq[day]) || 0;
+    Object.keys(S.state.orders || {}).forEach(function (id) {
+      var order = S.state.orders[id];
+      if (!order || !order.number) return;
+      var parts = String(order.number).split('-');
+      if (parts[0] !== day) return;
+      var seq = parseInt(parts[1], 10);
+      if (seq > n) n = seq;
+    });
+    n += 1;
     S.state.meta.seq[day] = n;
     saveState();
     if (S.sync.base) rset('meta/seq/' + day, n);
@@ -1559,20 +1927,26 @@
       rset('shifts', S.state.shifts);
       rset('meta', S.state.meta);
     }
+    if (S.sync.cloud) cloudPublishSoon();
     S.emit('change', 'all');
   };
 
   S.clearData = function (what) {
+    var clearedAt = Date.now();
+    S.state.meta = S.state.meta || { seq: {} };
+    S.state.meta.cleared = S.state.meta.cleared || {};
     if (what === 'all') {
       S.state.orders = {};
       S.state.expenses = {};
       S.state.shifts = {};
-      S.state.meta = { seq: {} };
+      S.state.meta = { seq: {}, cleared: { orders: clearedAt, expenses: clearedAt, shifts: clearedAt } };
     } else if (what === 'orders') {
       S.state.orders = {};
-      S.state.meta = { seq: {} };
+      S.state.meta.seq = {};
+      S.state.meta.cleared.orders = clearedAt;
     } else if (what === 'expenses') {
       S.state.expenses = {};
+      S.state.meta.cleared.expenses = clearedAt;
     }
     saveState();
     if (S.sync.base) {
@@ -1581,6 +1955,7 @@
       if (what === 'all') rset('shifts', null);
       if (what === 'all' || what === 'orders') rset('meta', S.state.meta);
     }
+    if (S.sync.cloud) cloudPublishSoon();
     S.emit('change', 'all');
   };
 
@@ -1697,8 +2072,10 @@
   /* ---------------- join code ---------------- */
 
   S.makeJoinCode = function (cfg) {
-    var json = JSON.stringify({ u: cfg.databaseURL, k: cfg.cafeKey });
-    return btoa(encodeURIComponent(json));
+    var payload = cfg && cfg.broker
+      ? { b: cfg.broker, k: cfg.cafeKey }
+      : { u: cfg.databaseURL, k: cfg.cafeKey };
+    return btoa(encodeURIComponent(JSON.stringify(payload)));
   };
 
   S.parseJoinCode = function (code) {
@@ -1707,6 +2084,7 @@
     try {
       var json = decodeURIComponent(atob(raw));
       var data = JSON.parse(json);
+      if (data && data.b && data.k) return { broker: data.b, cafeKey: data.k };
       if (data && data.u && data.k) return { databaseURL: data.u, cafeKey: data.k };
     } catch (e) { /* ignore */ }
     return null;

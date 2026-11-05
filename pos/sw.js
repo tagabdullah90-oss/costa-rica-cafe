@@ -1,5 +1,5 @@
 /* Costa Rica POS — service worker */
-const CACHE = 'crc-pos-v1';
+const CACHE = 'crc-pos-v2';
 const ASSETS = [
   './',
   './index.html',

@@ -440,9 +440,10 @@
   }
 
   function autoConnect() {
-    var cfg = S.loadSyncConfig();
-    if (!cfg) return;
-    S.connect(cfg).catch(function (err) {
+    if (!S.cloudBoot) return;
+    S.cloudBoot().then(function (res) {
+      if (res) renderHeader();
+    }).catch(function (err) {
       U.toast('تعذر الاتصال بالسحابة: ' + (err.message || ''), { type: 'error', duration: 5000 });
     });
   }

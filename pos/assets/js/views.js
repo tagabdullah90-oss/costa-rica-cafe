@@ -932,15 +932,21 @@
 
   function syncStatusHtml() {
     var st = S.sync.status;
-    var cfg = S.sync.cfg || S.loadSyncConfig();
+    var isCloud = S.sync.mode === 'cloud';
+    var cfg = isCloud ? S.sync.cloudCfg : (S.sync.cfg || S.loadSyncConfig());
     var color = st === 'online' ? 'var(--green)' : st === 'error' ? 'var(--red)' : st === 'offline' ? 'var(--amber)' : 'var(--muted)';
-    var label = st === 'online' ? 'متصل ومتزامن ✓' : st === 'offline' ? 'غير متصل بالنت' : st === 'connecting' ? 'جاري الاتصال…' : st === 'error' ? 'خطأ في الاتصال' : 'وضع محلي (جهاز واحد)';
+    var label = st === 'online'
+      ? (isCloud ? 'متزامن عبر السحابة ✓' : 'متزامن عبر Firebase ✓')
+      : st === 'offline' ? 'غير متصل بالنت — شغال محلياً'
+      : st === 'connecting' ? 'جاري الاتصال…'
+      : st === 'error' ? 'خطأ في الاتصال'
+      : 'وضع محلي (جهاز واحد)';
     return '<div style="padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--border)">' +
       '<div style="color:' + color + ';font-weight:800;font-size:13px">● ' + h(label) + '</div>' +
       (cfg ? '<div class="small muted mt8">الكافيه: <span class="mono">' + h(cfg.cafeKey) + '</span></div>' : '') +
       (st === 'error' && S.sync.error ? '<div class="small" style="color:var(--red);margin-top:6px">' + h(S.sync.error) + '</div>' : '') +
       '<div class="small muted" style="margin-top:6px">' + (st === 'local'
-        ? 'البيانات محفوظة على الهاتف ده بس. اربط الأجهزة عشان تتزامن.'
+        ? 'البيانات محفوظة على الهاتف ده بس. شغّل السحابة عشان تتزامن مع الأجهزة التانية.'
         : 'أي طلب جديد بيظهر على كل الأجهزة المتصلة في نفس اللحظة.') + '</div>' +
       '</div>';
   }
@@ -949,6 +955,8 @@
     html: function () {
       var s = S.state.settings;
       var cfg = S.sync.cfg || S.loadSyncConfig();
+      var isCloud = S.sync.mode === 'cloud';
+      var cloudCfg = (isCloud && S.sync.cloudCfg) || S.loadCloudConfig() || S.CLOUD_DEFAULT;
       var menuCount = S.allItems().length;
 
       return '<div class="page-head"><div><h1>⚙️ الإعدادات</h1><p>بيانات الكافيه، المنيو، والمزامنة</p></div></div>' +
@@ -980,22 +988,39 @@
         '<details class="acc" open><summary><span class="ico">☁️</span> المزامنة بين الأجهزة <span class="chev">▾</span></summary>' +
           '<div class="acc-body">' +
             '<div id="syncStatusBox">' + syncStatusHtml() + '</div>' +
-            '<div><label class="lbl">رابط قاعدة البيانات (Firebase databaseURL)</label>' +
-              '<input id="dbUrl" class="mono" dir="ltr" placeholder="https://xxxx-default-rtdb.firebaseio.com" value="' + h(cfg ? cfg.databaseURL : '') + '"></div>' +
-            '<div><label class="lbl">كود الكافيه (نفس الكود على كل الأجهزة)</label>' +
-              '<div class="row"><input id="cafeKey" class="mono" dir="ltr" placeholder="crc-xxxxxxx" value="' + h(cfg ? cfg.cafeKey : '') + '">' +
-              '<button class="btn sm ghost" data-act="genKey">جديد</button></div></div>' +
-            '<div class="row wrap">' +
-              '<button class="btn primary sm" data-act="connect">🔗 اتصال</button>' +
-              '<button class="btn ghost sm" data-act="disconnect">فصل</button>' +
-              '<button class="btn ghost sm" data-act="showQR">📷 QR للربط</button>' +
-              '<button class="btn ghost sm" data-act="copyJoin">نسخ كود الربط</button>' +
+            '<div class="cloud-box">' +
+              '<div class="row between"><b>☁️ السحابة المفتوحة</b><span class="pill ' + (isCloud ? 'ok' : '') + '">' + (isCloud ? 'مفعّلة' : 'متوقفة') + '</span></div>' +
+              '<p class="small muted">مزامنة لحظية بين كل الأجهزة من غير أي حساب أو إعداد. امسح الـQR من تليفون تاني وخلاص.</p>' +
+              '<label class="lbl">كود الكافيه</label>' +
+              '<div class="row"><input id="cloudKey" class="mono" dir="ltr" value="' + h(cloudCfg.cafeKey) + '">' +
+                '<button class="btn sm ghost" data-act="genCloudKey">جديد</button></div>' +
+              '<div class="row wrap">' +
+                (isCloud
+                  ? '<button class="btn primary sm" data-act="cloudOn">🔄 تحديث الاتصال</button>' +
+                    '<button class="btn ghost sm" data-act="cloudOff">⏹ إيقاف</button>'
+                  : '<button class="btn primary sm" data-act="cloudOn">▶️ تشغيل السحابة</button>') +
+                '<button class="btn gold sm" data-act="showQR">📷 QR للربط</button>' +
+                '<button class="btn ghost sm" data-act="copyJoin">نسخ لينك الربط</button>' +
+              '</div>' +
+              '<p class="small" style="color:var(--amber);line-height:1.7;margin:8px 0 0">🔓 السحابة مفتوحة: أي حد عنده كود الكافيه يقدر يشوف ويعدّل. متشاركش الكود برا الفريق.</p>' +
             '</div>' +
+            '<details class="adv"><summary>⚙️ متقدم: قاعدة بيانات Firebase خاصة</summary>' +
+              '<div class="adv-body">' +
+                '<div><label class="lbl">رابط قاعدة البيانات (Firebase databaseURL)</label>' +
+                  '<input id="dbUrl" class="mono" dir="ltr" placeholder="https://xxxx-default-rtdb.firebaseio.com" value="' + h(cfg && cfg.databaseURL ? cfg.databaseURL : '') + '"></div>' +
+                '<div><label class="lbl">كود الكافيه</label>' +
+                  '<div class="row"><input id="cafeKey" class="mono" dir="ltr" placeholder="crc-xxxxxxx" value="' + h(cfg && cfg.cafeKey ? cfg.cafeKey : '') + '">' +
+                  '<button class="btn sm ghost" data-act="genKey">جديد</button></div></div>' +
+                '<div class="row wrap">' +
+                  '<button class="btn primary sm" data-act="connect">🔗 اتصال</button>' +
+                  '<button class="btn ghost sm" data-act="disconnect">فصل</button>' +
+                  '<button class="btn ghost sm" data-act="showGuide">❓ دليل Firebase</button>' +
+                '</div>' +
+              '</div>' +
+            '</details>' +
             '<div class="divider"></div>' +
             '<div><label class="lbl">عندك كود ربط من جهاز تاني؟</label>' +
               '<div class="row"><input id="joinCode" placeholder="الصق الكود هنا"><button class="btn sm" data-act="join">ربط الجهاز</button></div></div>' +
-            '<button class="btn ghost sm block" data-act="showGuide">❓ إزاي أجهّز Firebase في 5 دقايق</button>' +
-            '<p class="small muted" style="line-height:1.7">المزامنة بتستخدم Firebase Realtime Database (مجاني للاستخدام العادي). الكود بيخلي كل الأجهزة تقرأ وتكتب في نفس مساحة الكافيه.</p>' +
           '</div>' +
         '</details>' +
 
@@ -1118,6 +1143,35 @@
         input.value = S.generateCafeKey();
         U.toast('اتعمل كود جديد — اضغط اتصال', { type: 'success' });
       },
+      genCloudKey: function () {
+        var input = document.getElementById('cloudKey');
+        if (input) input.value = S.generateCafeKey();
+        U.toast('اتعمل كود جديد — اضغط «تحديث الاتصال»', { type: 'success' });
+      },
+      cloudOn: function () {
+        var base = S.loadCloudConfig() || S.CLOUD_DEFAULT;
+        var input = document.getElementById('cloudKey');
+        var key = input && input.value.trim() ? input.value.trim() : base.cafeKey;
+        U.toast('جاري تشغيل السحابة…');
+        S.connectCloud({ broker: base.broker, cafeKey: key }).then(function () {
+          U.toast('السحابة شغّالة ✓', { type: 'success' });
+          App.renderHeader();
+          App.render();
+        }).catch(function (err) {
+          U.toast(err.message || 'تعذر تشغيل السحابة', { type: 'error', duration: 5200 });
+        });
+      },
+      cloudOff: function () {
+        U.confirm('إيقاف السحابة', 'البيانات هتفضل محفوظة على الجهاز، بس مش هتتزامن مع الأجهزة التانية لحد ما تشغّلها تاني.', { okText: 'إيقاف' })
+          .then(function (ok) {
+            if (!ok) return;
+            S.disconnect().then(function () {
+              U.toast('اتوقفت السحابة');
+              App.renderHeader();
+              App.render();
+            });
+          });
+      },
       connect: function () {
         var url = document.getElementById('dbUrl').value.trim();
         var key = document.getElementById('cafeKey').value.trim();
@@ -1148,8 +1202,7 @@
           });
       },
       showQR: function () {
-        var cfg = S.sync.cfg || S.loadSyncConfig();
-        if (!cfg) { U.toast('اتصل بالسحابة الأول عشان تعمل QR', { type: 'error' }); return; }
+        var cfg = S.sync.cloudCfg || S.loadCloudConfig() || S.sync.cfg || S.loadSyncConfig() || S.CLOUD_DEFAULT;
         var link = S.joinLink(cfg);
         U.modal(
           '<h3>امسح الكود من تليفون تاني</h3>' +
@@ -1167,8 +1220,7 @@
         });
       },
       copyJoin: function () {
-        var cfg = S.sync.cfg || S.loadSyncConfig();
-        if (!cfg) { U.toast('اتصل بالسحابة الأول', { type: 'error' }); return; }
+        var cfg = S.sync.cloudCfg || S.loadCloudConfig() || S.sync.cfg || S.loadSyncConfig() || S.CLOUD_DEFAULT;
         U.copy(S.joinLink(cfg)).then(function () { U.toast('تم نسخ كود الربط ✓', { type: 'success' }); })
           .catch(function () { U.toast('تعذر النسخ', { type: 'error' }); });
       },
