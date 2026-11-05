@@ -880,6 +880,7 @@
 
   S.disconnect = function () {
     return Promise.resolve().then(function () {
+      S.sync.cloudGen = (S.sync.cloudGen || 0) + 1;
       var mode = S.sync.mode;
       closeFirebase();
       closeCloud();
@@ -1006,6 +1007,7 @@
   function cloudPublish(force) {
     var cloud = S.sync.cloud;
     if (!cloud || !cloud.client || !cloud.client.connected) return;
+    if (!force && !cloud.synced) return;
     var snap = cloudSnapshot();
     var sig = cloudSig(snap.data);
     if (!force && sig === cloud.lastSig) return;
@@ -1039,6 +1041,7 @@
       cloud.graceTimer = null;
       if (!S.sync.cloud || S.sync.cloud !== cloud || cloud.synced) return;
       cloudPublish(true);
+      if (cloud.client && cloud.client.connected) cloud.synced = true;
     }, 3000);
   }
 
@@ -1168,6 +1171,9 @@
     closeFirebase();
     closeCloud();
 
+    S.sync.cloudGen = (S.sync.cloudGen || 0) + 1;
+    var gen = S.sync.cloudGen;
+
     S.sync.mode = 'cloud';
     S.sync.cfg = { broker: broker, cafeKey: key };
     S.sync.cloudCfg = { broker: broker, cafeKey: key };
@@ -1220,6 +1226,10 @@
         });
       });
     }).then(function (client) {
+      if (gen !== S.sync.cloudGen) {
+        try { client.end(true); } catch (e) { /* ignore */ }
+        return { cancelled: true };
+      }
       S.sync.cloud = {
         client: client,
         broker: broker,
@@ -1239,6 +1249,7 @@
       S.emit('change', 'sync');
       return { broker: broker, cafeKey: key };
     }).catch(function (err) {
+      if (gen !== S.sync.cloudGen) return null;
       S.sync.mode = null;
       S.sync.cloudCfg = null;
       setStatus('error', err && err.message ? err.message : 'فشل الاتصال');

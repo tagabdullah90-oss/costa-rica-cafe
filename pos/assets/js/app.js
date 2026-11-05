@@ -400,7 +400,8 @@
       U.confirm('ربط الجهاز بالكافيه', 'هيتم الاتصال بكود ' + cfg.cafeKey + ' وسحب الطلبات من السحابة. متأكد؟', { okText: 'ربط الجهاز' })
         .then(function (ok) {
           if (!ok) return;
-          S.connect(cfg).then(function () {
+          S.connect(cfg).then(function (res) {
+            if (!res || res.cancelled) return;
             U.toast('تم ربط الجهاز ✓', { type: 'success' });
             render();
           }).catch(function (err) {

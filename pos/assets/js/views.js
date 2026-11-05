@@ -1153,7 +1153,8 @@
         var input = document.getElementById('cloudKey');
         var key = input && input.value.trim() ? input.value.trim() : base.cafeKey;
         U.toast('جاري تشغيل السحابة…');
-        S.connectCloud({ broker: base.broker, cafeKey: key }).then(function () {
+        S.connectCloud({ broker: base.broker, cafeKey: key }).then(function (res) {
+          if (!res || res.cancelled) return;
           U.toast('السحابة شغّالة ✓', { type: 'success' });
           App.renderHeader();
           App.render();
