@@ -871,6 +871,7 @@
     S.sync.cloud = null;
     if (!cloud) return;
     if (cloud.timer) { clearTimeout(cloud.timer); cloud.timer = null; }
+    if (cloud.retryTimer) { clearTimeout(cloud.retryTimer); cloud.retryTimer = null; }
     if (cloud.graceTimer) { clearTimeout(cloud.graceTimer); cloud.graceTimer = null; }
     if (cloud.client) {
       try { cloud.client.removeAllListeners(); } catch (e) { /* ignore */ }
@@ -902,12 +903,18 @@
   /* ---------------- open cloud sync (MQTT, no account) ---------------- */
 
   var CLOUD = {
-    broker: 'wss://broker.emqx.io:8084/mqtt',
-    fallback: 'wss://broker.hivemq.com:8884/mqtt',
+    /* Port 443 first: works on networks that block 8084/8884. */
+    broker: 'wss://public.cloud.shiftr.io',
+    brokers: [
+      { url: 'wss://public.cloud.shiftr.io', username: 'public', password: 'public', label: 'Shiftr' },
+      { url: 'wss://broker.emqx.io:8084/mqtt', label: 'EMQX' },
+      { url: 'wss://broker.hivemq.com:8884/mqtt', label: 'HiveMQ' }
+    ],
     cafeKey: 'crc-costarica-7f3k9m2q',
     topicPrefix: 'crcpos/v1/',
-    script: 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js',
-    scriptAlt: 'https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js'
+    script: 'assets/js/mqtt.min.js',
+    scriptAlt: 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js',
+    scriptAlt2: 'https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js'
   };
 
   S.CLOUD_DEFAULT = { broker: CLOUD.broker, cafeKey: CLOUD.cafeKey };
@@ -918,7 +925,8 @@
     return {
       broker: String(cfg.broker),
       cafeKey: String(cfg.cafeKey),
-      enabled: cfg.enabled !== false
+      enabled: cfg.enabled !== false,
+      v: Number(cfg.v) || 0
     };
   }
 
@@ -930,7 +938,8 @@
     writeJSON(LS.cloud, {
       broker: cfg.broker,
       cafeKey: cfg.cafeKey,
-      enabled: cfg.enabled !== false
+      enabled: cfg.enabled !== false,
+      v: 2
     });
   }
 
@@ -945,6 +954,36 @@
     return u;
   }
 
+  function brokerInfo(url) {
+    var u = normalizeBroker(url);
+    for (var i = 0; i < CLOUD.brokers.length; i++) {
+      if (CLOUD.brokers[i].url === u) {
+        return {
+          url: u,
+          username: CLOUD.brokers[i].username || '',
+          password: CLOUD.brokers[i].password || '',
+          label: CLOUD.brokers[i].label || u
+        };
+      }
+    }
+    return { url: u, username: '', password: '', label: u };
+  }
+
+  /* Try the preferred broker first, then every known public broker. */
+  function brokerCandidates(preferred) {
+    var list = [];
+    var seen = {};
+    function add(url) {
+      var info = brokerInfo(url);
+      if (!info.url || seen[info.url]) return;
+      seen[info.url] = 1;
+      list.push(info);
+    }
+    if (preferred) add(preferred);
+    CLOUD.brokers.forEach(function (b) { add(b.url); });
+    return list;
+  }
+
   function cloudTopic(key) {
     return CLOUD.topicPrefix + key + '/state';
   }
@@ -953,6 +992,8 @@
     if (window.mqtt && window.mqtt.connect) return Promise.resolve();
     return U.loadScript(CLOUD.script).catch(function () {
       return U.loadScript(CLOUD.scriptAlt);
+    }).catch(function () {
+      return U.loadScript(CLOUD.scriptAlt2);
     });
   }
 
@@ -1004,6 +1045,33 @@
     return stableStringify(data || {});
   }
 
+  /* gzip keeps the full state small enough for public brokers (64KB limit). */
+  function encodeCloudPayload(json) {
+    if (typeof CompressionStream === 'undefined' || typeof Response === 'undefined') {
+      return Promise.resolve(json);
+    }
+    try {
+      var stream = new Blob([json], { type: 'application/json' }).stream()
+        .pipeThrough(new CompressionStream('gzip'));
+      return new Response(stream).arrayBuffer().then(function (buf) { return new Uint8Array(buf); });
+    } catch (e) {
+      return Promise.resolve(json);
+    }
+  }
+
+  function decodeCloudPayload(payload) {
+    if (typeof payload === 'string') return Promise.resolve(payload);
+    var u8 = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+    if (u8.length > 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+      if (typeof DecompressionStream === 'undefined' || typeof Response === 'undefined') {
+        return Promise.reject(new Error('الجهاز ده مش بيدعم فك ضغط بيانات السحابة'));
+      }
+      var stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+      return new Response(stream).text();
+    }
+    return Promise.resolve(new TextDecoder().decode(u8));
+  }
+
   function cloudPublish(force) {
     var cloud = S.sync.cloud;
     if (!cloud || !cloud.client || !cloud.client.connected) return;
@@ -1012,9 +1080,27 @@
     var sig = cloudSig(snap.data);
     if (!force && sig === cloud.lastSig) return;
     cloud.lastSig = sig;
-    try {
-      cloud.client.publish(cloud.topic, JSON.stringify(snap), { qos: 1, retain: true });
-    } catch (e) { /* ignore */ }
+    var gen = S.sync.cloudGen;
+    encodeCloudPayload(JSON.stringify(snap)).then(function (payload) {
+      if (!S.sync.cloud || S.sync.cloud !== cloud || gen !== S.sync.cloudGen) return;
+      if (!cloud.client.connected) { cloud.lastSig = ''; return; }
+      try {
+        cloud.client.publish(cloud.topic, payload, { qos: 1, retain: true }, function (err) {
+          if (!err) return;
+          if (S.sync.cloud !== cloud || gen !== S.sync.cloudGen) return;
+          cloud.lastSig = '';
+          if (cloud.retryTimer) return;
+          cloud.retryTimer = setTimeout(function () {
+            cloud.retryTimer = null;
+            if (S.sync.cloud === cloud && gen === S.sync.cloudGen) cloudPublish(true);
+          }, 5000);
+        });
+      } catch (e) {
+        cloud.lastSig = '';
+      }
+    }).catch(function () {
+      cloud.lastSig = '';
+    });
   }
 
   function cloudPublishSoon() {
@@ -1140,31 +1226,102 @@
     return localAhead;
   }
 
-  function onCloudMessage(buf) {
-    var msg;
-    try { msg = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (!msg || msg.v !== 1 || !msg.data) return;
-    if (msg.dev === S.deviceId) return;
-    var cloud = S.sync.cloud;
-    if (cloud) {
+  function handleCloudPayload(payload, cloud) {
+    return decodeCloudPayload(payload).then(function (text) {
+      if (!text) return;
+      var msg;
+      try { msg = JSON.parse(text); } catch (e) { return; }
+      if (!msg || msg.v !== 1 || !msg.data) return;
+      if (msg.dev === S.deviceId) return;
+      if (!S.sync.cloud || S.sync.cloud !== cloud) return;
       cloud.synced = true;
       if (cloud.graceTimer) { clearTimeout(cloud.graceTimer); cloud.graceTimer = null; }
-    }
-    var remoteSig = cloudSig(msg.data);
-    applyCloudSnapshot(msg.data, Number(msg.at) || 0);
-    if (!S.sync.cloud || S.sync.cloud !== cloud) return;
-    var mergedSig = cloudSig(cloudData());
-    if (!cloud.lastSig && mergedSig === remoteSig) cloud.lastSig = mergedSig;
-    if (mergedSig !== cloud.lastSig) cloudPublishSoon();
+      var remoteSig = cloudSig(msg.data);
+      applyCloudSnapshot(msg.data, Number(msg.at) || 0);
+      if (!S.sync.cloud || S.sync.cloud !== cloud) return;
+      var mergedSig = cloudSig(cloudData());
+      if (!cloud.lastSig && mergedSig === remoteSig) cloud.lastSig = mergedSig;
+      if (mergedSig !== cloud.lastSig) cloudPublishSoon();
+    });
+  }
+
+  function onCloudMessage(buf) {
+    var cloud = S.sync.cloud;
+    if (!cloud) return;
+    cloud.rxChain = (cloud.rxChain || Promise.resolve()).then(function () {
+      return handleCloudPayload(buf, cloud);
+    }).catch(function () { /* ignore malformed message */ });
   }
 
   function subscribeCloud(client, key) {
     try { client.subscribe(cloudTopic(key), { qos: 1 }); } catch (e) { /* ignore */ }
   }
 
+  function tryCloudBroker(broker, key) {
+    return new Promise(function (resolve, reject) {
+      var opts = {
+        clientId: 'crc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4),
+        keepalive: 30,
+        reconnectPeriod: 4000,
+        connectTimeout: 8000,
+        clean: true,
+        timerVariant: 'native'
+      };
+      if (broker.username) {
+        opts.username = broker.username;
+        opts.password = broker.password;
+      }
+      var client;
+      try {
+        client = window.mqtt.connect(broker.url, opts);
+      } catch (e) {
+        reject(e);
+        return;
+      }
+      var settled = false;
+      var timer = setTimeout(function () {
+        fail(new Error('انتهت مهلة الاتصال'));
+      }, 9000);
+      function fail(err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try { client.end(true); } catch (e) { /* ignore */ }
+        reject(err);
+      }
+      function ok() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(client);
+      }
+      client.on('connect', function () {
+        if (!settled) { ok(); return; }
+        var cloud = S.sync.cloud;
+        if (cloud && cloud.client === client) {
+          subscribeCloud(client, key);
+          setStatus('online', '');
+          startCloudGrace();
+        }
+      });
+      client.on('reconnect', function () {
+        var cloud = S.sync.cloud;
+        if (settled && cloud && cloud.client === client) setStatus('connecting', '');
+      });
+      client.on('close', function () {
+        var cloud = S.sync.cloud;
+        if (settled && cloud && cloud.client === client) setStatus('offline', '');
+      });
+      client.on('error', function (err) {
+        if (!settled) fail(err || new Error('خطأ في الاتصال'));
+      });
+      if (client.connected) ok();
+    });
+  }
+
   S.connectCloud = function (cfg) {
     cfg = cfg || {};
-    var broker = normalizeBroker(cfg.broker || cfg.databaseURL || CLOUD.broker);
+    var preferred = normalizeBroker(cfg.broker || cfg.databaseURL || CLOUD.broker);
     var key = String(cfg.cafeKey || CLOUD.cafeKey).trim().replace(/[^a-zA-Z0-9_-]/g, '');
     if (!key) return Promise.reject(new Error('كود الكافيه مطلوب'));
 
@@ -1175,79 +1332,58 @@
     var gen = S.sync.cloudGen;
 
     S.sync.mode = 'cloud';
-    S.sync.cfg = { broker: broker, cafeKey: key };
-    S.sync.cloudCfg = { broker: broker, cafeKey: key };
-    saveCloudConfig({ broker: broker, cafeKey: key, enabled: true });
+    S.sync.cfg = { broker: preferred, cafeKey: key };
+    S.sync.cloudCfg = { broker: preferred, cafeKey: key };
+    saveCloudConfig({ broker: preferred, cafeKey: key, enabled: true });
     S.saveSyncConfig(null);
     setStatus('connecting', '');
     S.emit('change', 'sync');
 
     return loadMqtt().then(function () {
       if (!window.mqtt || !window.mqtt.connect) throw new Error('تعذر تحميل مكتبة المزامنة');
-      return new Promise(function (resolve, reject) {
-        var client = window.mqtt.connect(broker, {
-          clientId: 'crc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4),
-          keepalive: 30,
-          reconnectPeriod: 5000,
-          connectTimeout: 12000,
-          clean: true
-        });
-        var settled = false;
-        var timer = setTimeout(function () {
-          if (settled) return;
-          settled = true;
-          try { client.end(true); } catch (e) { /* ignore */ }
-          reject(new Error('تعذر الاتصال بالسحابة — راجع النت وجرب تاني'));
-        }, 16000);
-        client.on('connect', function () {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
-            resolve(client);
-          } else if (S.sync.cloud) {
-            subscribeCloud(client, key);
-            setStatus('online', '');
-            startCloudGrace();
-          }
-        });
-        client.on('reconnect', function () {
-          if (settled && S.sync.cloud) setStatus('connecting', '');
-        });
-        client.on('close', function () {
-          if (settled && S.sync.cloud) setStatus('offline', '');
-        });
-        client.on('error', function (err) {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
+      var candidates = brokerCandidates(preferred);
+      var idx = 0;
+
+      function attempt() {
+        if (gen !== S.sync.cloudGen) return Promise.resolve({ cancelled: true });
+        if (idx >= candidates.length) {
+          throw new Error('تعذر الاتصال بأي سيرفر — جرّب شبكة تانية أو امسح QR من جهاز شغّال');
+        }
+        var broker = candidates[idx++];
+        return tryCloudBroker(broker, key).then(function (client) {
+          if (gen !== S.sync.cloudGen) {
             try { client.end(true); } catch (e) { /* ignore */ }
-            reject(new Error(err && err.message ? err.message : 'خطأ في الاتصال بالسحابة'));
+            return { cancelled: true };
           }
+          S.sync.cloud = {
+            client: client,
+            broker: broker.url,
+            cafeKey: key,
+            topic: cloudTopic(key),
+            lastSig: '',
+            lastLocalAt: 0,
+            synced: false,
+            timer: null,
+            graceTimer: null
+          };
+          S.sync.cfg = { broker: broker.url, cafeKey: key };
+          S.sync.cloudCfg = { broker: broker.url, cafeKey: key };
+          saveCloudConfig({ broker: broker.url, cafeKey: key, enabled: true });
+          S.sync.connectedAt = Date.now();
+          client.on('message', function (topic, buf) { onCloudMessage(buf); });
+          subscribeCloud(client, key);
+          setStatus('online', '');
+          startCloudGrace();
+          S.emit('change', 'sync');
+          return { broker: broker.url, cafeKey: key, label: broker.label };
+        }).catch(function (err) {
+          if (gen !== S.sync.cloudGen) return { cancelled: true };
+          setStatus('connecting', '');
+          return attempt();
         });
-      });
-    }).then(function (client) {
-      if (gen !== S.sync.cloudGen) {
-        try { client.end(true); } catch (e) { /* ignore */ }
-        return { cancelled: true };
       }
-      S.sync.cloud = {
-        client: client,
-        broker: broker,
-        cafeKey: key,
-        topic: cloudTopic(key),
-        lastSig: '',
-        lastLocalAt: 0,
-        synced: false,
-        timer: null,
-        graceTimer: null
-      };
-      S.sync.connectedAt = Date.now();
-      client.on('message', function (topic, buf) { onCloudMessage(buf); });
-      subscribeCloud(client, key);
-      setStatus('online', '');
-      startCloudGrace();
-      S.emit('change', 'sync');
-      return { broker: broker, cafeKey: key };
+
+      return attempt();
     }).catch(function (err) {
       if (gen !== S.sync.cloudGen) return null;
       S.sync.mode = null;
@@ -1274,7 +1410,11 @@
       return Promise.resolve(null);
     }
     if (!cloudCfg) {
-      cloudCfg = { broker: CLOUD.broker, cafeKey: CLOUD.cafeKey, enabled: true };
+      cloudCfg = { broker: CLOUD.broker, cafeKey: CLOUD.cafeKey, enabled: true, v: 2 };
+      saveCloudConfig(cloudCfg);
+    } else if (cloudCfg.v !== 2 && cloudCfg.broker === 'wss://broker.emqx.io:8084/mqtt') {
+      /* Old default broker from the first build: move to the 443 broker. */
+      cloudCfg = { broker: CLOUD.broker, cafeKey: cloudCfg.cafeKey, enabled: true, v: 2 };
       saveCloudConfig(cloudCfg);
     }
     return S.connectCloud(cloudCfg);

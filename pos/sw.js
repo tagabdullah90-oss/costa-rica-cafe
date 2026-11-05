@@ -1,10 +1,11 @@
 /* Costa Rica POS — service worker */
-const CACHE = 'crc-pos-v4';
+const CACHE = 'crc-pos-v6';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './assets/css/app.css',
+  './assets/js/mqtt.min.js',
   './assets/js/menu-data.js',
   './assets/js/core.js',
   './assets/js/views.js',
