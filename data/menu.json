@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-24T01:26:37.108Z",
+  "updatedAt": "2026-11-24T01:31:33.404Z",
   "categories": [
     {
       "id": "hot",
@@ -104,6 +104,18 @@
           "desc": ""
         },
         {
+          "id": "item-mwpkw2d8-qbfd4",
+          "name": "Coffe 1",
+          "price": 50,
+          "desc": ""
+        },
+        {
+          "id": "item-mwpkwkdw-mq13p",
+          "name": "قهوة سوق",
+          "price": 20,
+          "desc": ""
+        },
+        {
           "id": "hot-cider",
           "name": "هوت سيدر",
           "price": 40,
@@ -140,27 +152,15 @@
           "desc": ""
         },
         {
-          "id": "matcha-latte",
-          "name": "ماتشا لاتيه",
-          "price": 50,
-          "desc": ""
-        },
-        {
           "id": "item-mwijqz64-ei02n",
           "name": "براد شاي",
           "price": 40,
           "desc": ""
         },
         {
-          "id": "item-mwpkw2d8-qbfd4",
-          "name": "Coffe 1",
+          "id": "matcha-latte",
+          "name": "ماتشا لاتيه",
           "price": 50,
-          "desc": ""
-        },
-        {
-          "id": "item-mwpkwkdw-mq13p",
-          "name": "قهوة سوق",
-          "price": 20,
           "desc": ""
         }
       ]
@@ -375,31 +375,6 @@
       ]
     },
     {
-      "id": "extras",
-      "name": "الإضافات",
-      "icon": "➕",
-      "items": [
-        {
-          "id": "extra-sauce",
-          "name": "إكسترا صوص",
-          "price": 20,
-          "desc": ""
-        },
-        {
-          "id": "extra-flavor",
-          "name": "إكسترا فليفر",
-          "price": 20,
-          "desc": ""
-        },
-        {
-          "id": "small-water",
-          "name": "مياه صغيرة",
-          "price": 10,
-          "desc": ""
-        }
-      ]
-    },
-    {
       "id": "soda",
       "name": "مشروبات غازية",
       "icon": "🥤",
@@ -438,6 +413,31 @@
           "id": "redbull",
           "name": "ريد بول",
           "price": 85,
+          "desc": ""
+        }
+      ]
+    },
+    {
+      "id": "extras",
+      "name": "الإضافات",
+      "icon": "➕",
+      "items": [
+        {
+          "id": "extra-sauce",
+          "name": "إكسترا صوص",
+          "price": 20,
+          "desc": ""
+        },
+        {
+          "id": "extra-flavor",
+          "name": "إكسترا فليفر",
+          "price": 20,
+          "desc": ""
+        },
+        {
+          "id": "small-water",
+          "name": "مياه صغيرة",
+          "price": 10,
           "desc": ""
         }
       ]
