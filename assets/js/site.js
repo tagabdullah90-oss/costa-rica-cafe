@@ -513,6 +513,9 @@
     if (site.instagram) {
       buttons.push('<a class="btn btn-ghost" href="' + C.esc(site.instagram) + '" target="_blank" rel="noopener">Instagram</a>');
     }
+    if (site.tiktok) {
+      buttons.push('<a class="btn btn-ghost" href="' + C.esc(site.tiktok) + '" target="_blank" rel="noopener">TikTok</a>');
+    }
     if (site.mapUrl) {
       buttons.push('<a class="btn btn-ghost" href="' + C.esc(site.mapUrl) + '" target="_blank" rel="noopener">📍 الموقع على الخريطة</a>');
     }
@@ -609,7 +612,7 @@
       'openingHours': site.hours || undefined,
       'url': location.href,
       'hasMenu': location.href,
-      'sameAs': [site.facebook, site.instagram].filter(Boolean)
+      'sameAs': [site.facebook, site.instagram, site.tiktok].filter(Boolean)
     };
 
     Object.keys(data).forEach(function (key) {
