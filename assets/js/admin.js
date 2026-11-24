@@ -395,6 +395,7 @@
         { key: 'address', label: 'العنوان' },
         { key: 'facebook', label: 'لينك فيسبوك', type: 'url', dir: 'ltr' },
         { key: 'instagram', label: 'لينك إنستجرام', type: 'url', dir: 'ltr' },
+        { key: 'tiktok', label: 'لينك تيك توك', type: 'url', dir: 'ltr' },
         { key: 'mapUrl', label: 'لينك الموقع على الخريطة', type: 'url', dir: 'ltr', full: true }
       ]
     },
@@ -624,6 +625,7 @@
       hours: site.hours,
       facebook: site.facebook,
       instagram: site.instagram,
+      tiktok: site.tiktok,
       mapUrl: site.mapUrl,
       note: site.note,
       theme: {
