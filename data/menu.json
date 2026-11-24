@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-01T21:50:21.667Z",
+  "updatedAt": "2026-11-24T01:26:37.108Z",
   "categories": [
     {
       "id": "hot",
@@ -143,6 +143,24 @@
           "id": "matcha-latte",
           "name": "ماتشا لاتيه",
           "price": 50,
+          "desc": ""
+        },
+        {
+          "id": "item-mwijqz64-ei02n",
+          "name": "براد شاي",
+          "price": 40,
+          "desc": ""
+        },
+        {
+          "id": "item-mwpkw2d8-qbfd4",
+          "name": "Coffe 1",
+          "price": 50,
+          "desc": ""
+        },
+        {
+          "id": "item-mwpkwkdw-mq13p",
+          "name": "قهوة سوق",
+          "price": 20,
           "desc": ""
         }
       ]
@@ -451,6 +469,25 @@
           "id": "shisha-costa-rica",
           "name": "شيشة كوستا ريكا",
           "price": 150,
+          "desc": ""
+        }
+      ]
+    },
+    {
+      "id": "cat-mwkusye2-cmbzl",
+      "name": "PS 4",
+      "icon": "PS",
+      "items": [
+        {
+          "id": "item-mwkutdxq-k119o",
+          "name": "ساعة",
+          "price": 50,
+          "desc": ""
+        },
+        {
+          "id": "item-mwkutp8l-q16xn",
+          "name": "نص ساعة",
+          "price": 30,
           "desc": ""
         }
       ]
