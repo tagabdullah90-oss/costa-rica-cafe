@@ -1,5 +1,5 @@
 /* Costa Rica Cafe — Service Worker (عمل أوفلاين + سرعة) */
-const CACHE = 'costa-rica-v1';
+const CACHE = 'costa-rica-v2';
 
 const CORE = [
   './',
