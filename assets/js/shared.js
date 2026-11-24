@@ -93,6 +93,7 @@
     hours: '',
     facebook: '',
     instagram: '',
+    tiktok: '',
     mapUrl: '',
     note: '',
     theme: { gold: '#d8b477', gold2: '#f0d7a6', bg: '#100e0c' }
